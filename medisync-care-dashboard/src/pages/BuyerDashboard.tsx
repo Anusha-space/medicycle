@@ -1,217 +1,202 @@
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { Search, ShoppingCart, AlertTriangle, Store } from "lucide-react";
 
-const getDaysToExpiry = (expiry: string) => {
-  const date = new Date(expiry); // handles ISO format
-  const diff = date.getTime() - Date.now();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
+interface Medicine {
+  id: number;
+  name: string;
+  batch: string;
+  expiry_date: string;
+  quantity: number;
+  price: number;
+  discount_percent: number;
+  status: string;
+  pharmacy_name: string;
+  pharmacy_phone: string;
+}
+
 const BuyerDashboard = () => {
+  const { token } = useAuth();
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [filtered, setFiltered] = useState<Medicine[]>([]);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("default");
-  const [expiryFilter, setExpiryFilter] = useState("all");
-  const [medicines, setMedicines] = useState<any[]>([]);
-  const [quantities, setQuantities] = useState<{ [key: number]: number }>({});
+  const [loading, setLoading] = useState(true);
+  const [ordering, setOrdering] = useState<number | null>(null);
 
-  // ✅ FETCH FROM BACKEND
+  const fetchMedicines = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/medicines");
+      const data = await res.json();
+      setMedicines(data);
+      setFiltered(data);
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to load medicines.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMedicines(); }, []);
+
   useEffect(() => {
-    fetch("http://localhost:5000/api/medicines")
-      .then((res) => res.json())
-      .then((data) => {
-        setMedicines(data);
+    const q = search.toLowerCase();
+    setFiltered(medicines.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      m.pharmacy_name?.toLowerCase().includes(q)
+    ));
+  }, [search, medicines]);
 
-        const qty: any = {};
-        data.forEach((m: any) => {
-          qty[m.id] = 1;
-        });
-        setQuantities(qty);
-      });
-  }, []);
-
-  // ✅ FILTERING
-  let filtered = medicines.filter((m: any) =>
-    m.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  if (expiryFilter === "30")
-    filtered = filtered.filter(
-      (m: any) => getDaysToExpiry(m.expiry_date) <= 30
-    );
-  else if (expiryFilter === "90")
-    filtered = filtered.filter(
-      (m: any) => getDaysToExpiry(m.expiry_date) <= 90
-    );
-  else if (expiryFilter === "180")
-    filtered = filtered.filter(
-      (m: any) => getDaysToExpiry(m.expiry_date) <= 180
-    );
-
-  if (sortBy === "price-asc")
-    filtered.sort((a, b) => a.price - b.price);
-  else if (sortBy === "price-desc")
-    filtered.sort((a, b) => b.price - a.price);
-  else if (sortBy === "expiry")
-    filtered.sort(
-      (a, b) =>
-        getDaysToExpiry(a.expiry_date) -
-        getDaysToExpiry(b.expiry_date)
-    );
-
-  // ✅ QUANTITY HANDLERS
-  const increaseQty = (id: number, maxQty: number) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [id]: Math.min((prev[id] || 1) + 1, maxQty),
-    }));
-  };
-
-  const decreaseQty = (id: number) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [id]: Math.max((prev[id] || 1) - 1, 1),
-    }));
-  };
-
-  // ✅ PLACE ORDER
-  const addToCart = async (medicineId: number) => {
-    const quantity = quantities[medicineId] || 1;
-
+  const handleOrder = async (medicine: Medicine) => {
+    setOrdering(medicine.id);
     try {
       const res = await fetch("http://localhost:5000/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          medicine_id: medicineId,
-          quantity: quantity,
-        }),
+          medicine_id: medicine.id,
+          quantity: 1,
+          total_price: medicine.price * (1 - medicine.discount_percent / 100)
+        })
       });
-
-      await res.json();
-      alert("Order placed successfully!");
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      alert("Error placing order");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      toast({ title: "Order Placed!", description: `Successfully ordered ${medicine.name}` });
+      fetchMedicines();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setOrdering(null);
     }
+  };
+
+  const getDaysToExpiry = (expiry: string) => {
+    return Math.floor((new Date(expiry).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const getExpiryBadge = (expiry: string) => {
+    const days = getDaysToExpiry(expiry);
+    if (days <= 30) return <Badge variant="destructive">Expires in {days}d</Badge>;
+    if (days <= 60) return <Badge className="bg-orange-500">Expires in {days}d</Badge>;
+    if (days <= 90) return <Badge className="bg-yellow-500">Expires in {days}d</Badge>;
+    return <Badge variant="secondary">Expires in {days}d</Badge>;
   };
 
   return (
     <DashboardLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Buyer Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Browse and purchase near-expiry medicines.
-        </p>
-      </div>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Browse Medicines</h1>
+          <p className="text-muted-foreground">Find discounted near-expiry medicines from verified pharmacies</p>
+        </div>
 
-      {/* Filters */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-sm">
+        {/* Search */}
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search medicines..."
+            placeholder="Search by medicine name or pharmacy..."
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <Select value={expiryFilter} onValueChange={setExpiryFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Expiry range" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Expiry</SelectItem>
-            <SelectItem value="30">Within 30 days</SelectItem>
-            <SelectItem value="90">Within 90 days</SelectItem>
-            <SelectItem value="180">Within 180 days</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-2xl font-bold">{medicines.length}</p>
+              <p className="text-xs text-muted-foreground">Available Medicines</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-2xl font-bold text-orange-500">
+                {medicines.filter(m => getDaysToExpiry(m.expiry_date) <= 30).length}
+              </p>
+              <p className="text-xs text-muted-foreground">Expiring Soon (40% off)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-2xl font-bold text-green-500">
+                {medicines.filter(m => m.discount_percent > 0).length}
+              </p>
+              <p className="text-xs text-muted-foreground">Discounted Medicines</p>
+            </CardContent>
+          </Card>
+        </div>
 
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default</SelectItem>
-            <SelectItem value="price-asc">
-              Price: Low → High
-            </SelectItem>
-            <SelectItem value="price-desc">
-              Price: High → Low
-            </SelectItem>
-            <SelectItem value="expiry">
-              Expiry: Soonest
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Medicine Cards */}
+        {loading ? (
+          <p className="text-muted-foreground">Loading medicines...</p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
+            <Store className="h-12 w-12 text-muted-foreground mb-3" />
+            <p className="font-medium">No medicines found</p>
+            <p className="text-sm text-muted-foreground">Try a different search term</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((med) => (
+              <Card key={med.id} className="relative">
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-base">{med.name}</CardTitle>
+                    {med.discount_percent > 0 && (
+                      <Badge className="bg-green-500">{med.discount_percent}% OFF</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Store className="h-3 w-3" />
+                    {med.pharmacy_name || "Pharmacy"}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    {getExpiryBadge(med.expiry_date)}
+                    <span className="text-xs text-muted-foreground">Qty: {med.quantity}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-lg font-bold">
+                        ₹{(med.price * (1 - med.discount_percent / 100)).toFixed(2)}
+                      </span>
+                      {med.discount_percent > 0 && (
+                        <span className="ml-2 text-sm text-muted-foreground line-through">₹{med.price}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {med.discount_percent > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-orange-500">
+                      <AlertTriangle className="h-3 w-3" /> Near expiry — verified safe to use
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => handleOrder(med)}
+                    disabled={ordering === med.id}
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    {ordering === med.id ? "Placing Order..." : "Order Now"}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Cards */}
-      {filtered.length === 0 ? (
-        <div className="text-center p-10 border rounded-xl">
-          No medicines found
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((m: any) => {
-            const days = getDaysToExpiry(m.expiry_date);
-            const urgent = days <= 30;
-
-            return (
-              <div
-                key={m.id}
-                className={`rounded-xl border p-5 ${
-                  urgent ? "border-red-500 bg-red-50 shadow-md" : ""
-                }`}
-              >
-                <h3 className="font-semibold">{m.name}</h3>
-
-                <p>₹{m.price}/unit</p>
-                <p>Expires: {m.expiry_date}</p>
-                <p>Available: {m.quantity}</p>
-
-                {/* Quantity */}
-                <div className="flex items-center gap-2 my-3">
-                  <button
-                    onClick={() => decreaseQty(m.id)}
-                    className="px-2 border"
-                  >
-                    -
-                  </button>
-                  <span>{quantities[m.id] || 1}</span>
-                  <button
-                    onClick={() => increaseQty(m.id, m.quantity)}
-                    className="px-2 border"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Order */}
-                <Button
-                  onClick={() => addToCart(m.id)}
-                  className="w-full"
-                >
-                  Add to Cart
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </DashboardLayout>
   );
 };

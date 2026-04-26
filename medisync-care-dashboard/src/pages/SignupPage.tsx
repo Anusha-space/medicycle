@@ -6,16 +6,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Activity, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const SignupPage = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !role) {
       toast({ title: "Validation Error", description: "All fields are required.", variant: "destructive" });
@@ -26,11 +28,15 @@ const SignupPage = () => {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await register(name, email, password, role);
+      toast({ title: "Account Created", description: "Welcome to MediCycle!" });
+      navigate("/dashboard");
+    } catch (err: any) {
+      toast({ title: "Signup Failed", description: err.message, variant: "destructive" });
+    } finally {
       setLoading(false);
-      toast({ title: "Account Created", description: "You can now log in." });
-      navigate("/login");
-    }, 800);
+    }
   };
 
   return (
@@ -62,7 +68,8 @@ const SignupPage = () => {
               <SelectTrigger className="mt-1"><SelectValue placeholder="Select your role" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="pharmacy">Pharmacy (Seller)</SelectItem>
-                <SelectItem value="buyer">Buyer (Hospital/Clinic)</SelectItem>
+                <SelectItem value="hospital">Hospital (Urgent Buyer)</SelectItem>
+                <SelectItem value="patient">Patient (Buyer)</SelectItem>
               </SelectContent>
             </Select>
           </div>
