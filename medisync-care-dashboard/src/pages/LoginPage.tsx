@@ -5,25 +5,31 @@ import { Label } from "@/components/ui/label";
 import { Activity, LogIn } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({ title: "Validation Error", description: "All fields are required.", variant: "destructive" });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await login(email, password);
       toast({ title: "Login Successful", description: "Welcome back!" });
       navigate("/dashboard");
-    }, 800);
+    } catch (err: any) {
+      toast({ title: "Login Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
