@@ -12,7 +12,7 @@ app.use('/api/medicines', require('./routes/medicines'));
 app.use('/api/orders',    require('./routes/orders'));
 app.use('/api/urgent', require('./routes/urgentRequests'));
 app.get('/', (req, res) => res.json({ status: 'Medicycle API running' }));
-
+app.use('/api/notifications', require('./routes/notifications'));
 app.use((req, res) => res.status(404).json({ message: 'Route not found.' }));
 
 const PORT = process.env.PORT || 5000;

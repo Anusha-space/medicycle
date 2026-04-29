@@ -28,8 +28,8 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
     // Pharmacy only
     { to: "/inventory", icon: Package, label: "Inventory", roles: ["pharmacy", "admin"] },
-    { to: "/redistribution", icon: RefreshCw, label: "Redistribution", roles: ["pharmacy", "admin"] },
-    { to: "/waste-disposal", icon: Trash2, label: "Waste Disposal", roles: ["pharmacy", "admin"] },
+ //   { to: "/redistribution", icon: RefreshCw, label: "Redistribution", roles: ["pharmacy", "admin"] },
+ //   { to: "/waste-disposal", icon: Trash2, label: "Waste Disposal", roles: ["pharmacy", "admin"] },
     { to: "/donations", icon: Heart, label: "Donations", roles: ["pharmacy", "admin"] },
 
     // Hospital/patient only
